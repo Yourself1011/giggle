@@ -9,19 +9,27 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.24.1",
+    "@trpc/client": "^11.0.0-next-beta.303",
+    "@trpc/next": "^11.0.0-next-beta.303",
+    "@trpc/react-query": "^11.0.0-next-beta.303",
+    "@trpc/server": "^11.0.0-next-beta.303",
+    "next": "14.1.1",
+    "prisma": "^5.10.2",
     "react": "^18",
     "react-dom": "^18",
-    "next": "14.1.1"
+    "sass": "^1.71.1",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.1.1",
     "postcss": "^8",
     "tailwindcss": "^3.3.0",
-    "eslint": "^8",
-    "eslint-config-next": "14.1.1"
+    "typescript": "^5"
   }
 }
