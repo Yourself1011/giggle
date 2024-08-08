@@ -6,6 +6,43 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model Site {
+  url           String         @unique
+  crawled       Boolean        @default(false)
+  pageRank      Float
+  terms         TermsOnSites[]
+  outgoingLinks Link[]         @relation("incomingLinks")
+  incomingLinks Link[]         @relation("outgoingLinks")
+
+  @@index([url], type: Hash)
+}
+
+model Link {
+  incomingSite Site   @relation("incomingLinks", fields: [incomingUrl], references: [url])
+  incomingUrl  String
+  outgoingSite Site   @relation("outgoingLinks", fields: [outgoingUrl], references: [url])
+  outgoingUrl  String
+
+  @@id([incomingUrl, outgoingUrl])
+}
+
+model Term {
+  name  String         @unique
+  sites TermsOnSites[]
+
+  @@index([name], type: Hash)
+}
+
+model TermsOnSites {
+  Term      Term   @relation(fields: [termName], references: [name], onDelete: Cascade)
+  termName  String
+  Site      Site   @relation(fields: [siteUrl], references: [url], onDelete: Cascade)
+  siteUrl   String
+  frequency Float
+
+  @@id([termName, siteUrl])
 }
