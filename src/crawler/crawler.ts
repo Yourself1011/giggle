@@ -18,10 +18,9 @@ async function search(url: URL) {
             const sitemapRaw = await fetch(robots.sitemap);
             const sitemap = (await sitemapRaw.text()).matchAll(/(?<=<loc>).*(?=<\/loc>)/g);
 
-            await prisma.site.createMany({
+            prisma.site.createMany({
                 data: [...sitemap].map((loc) => ({
                     url: loc[0],
-                    pageRank: 0,
                 })),
             });
         }
@@ -29,6 +28,40 @@ async function search(url: URL) {
 
     const res = await fetch(url);
 
-    if (res.ok) {
-    }
+    if (!res.ok) return;
+
+    const raw = await res.text();
+
+    const rendered = raw; // TODO: run javascript
+
+    // match all urls
+    const urls = [
+        ...rendered.matchAll(
+            /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})|((?<=href=").*(?="))/gm
+        ),
+    ];
+
+    // const outgoing = await prisma.site.createManyAndReturn({
+    //     data: urls.map((url) => ({ url: url[0] })),
+    //     skipDuplicates: true,
+    // });
+
+    const entry = await prisma.site.create({
+        data: {
+            url: url.href,
+            pageRank: 0,
+        },
+    });
+
+    const outgoing = await prisma.$transaction(
+        urls.map((url) =>
+            prisma.site.upsert({
+                where: { url: url[0] },
+                update: { incomingLinks: { create: [{ incomingUrl: entry.url }] } },
+                create: { url: url[0], incomingLinks: { create: [{ incomingUrl: entry.url }] } },
+            })
+        )
+    );
+
+    const textOnly = rendered.replaceAll(/(<.*>)|(<\/.*>)/gm, ""); // remove html tags
 }

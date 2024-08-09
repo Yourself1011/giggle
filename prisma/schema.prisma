@@ -13,7 +13,7 @@ datasource db {
 model Site {
   url           String         @unique
   crawled       Boolean        @default(false)
-  pageRank      Float
+  pageRank      Float          @default(0)
   terms         TermsOnSites[]
   outgoingLinks Link[]         @relation("incomingLinks")
   incomingLinks Link[]         @relation("outgoingLinks")
