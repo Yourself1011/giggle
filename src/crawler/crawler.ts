@@ -16,11 +16,11 @@ async function search(url: URL) {
         const robots = await parse(url, userAgentToken);
         if (robots?.sitemap) {
             const sitemapRaw = await fetch(robots.sitemap);
-            const sitemap = new DOMParser().parseFromString(await sitemapRaw.text(), "text/xml");
+            const sitemap = (await sitemapRaw.text()).matchAll(/(?<=<loc>).*(?=<\/loc>)/g);
 
-            prisma.site.createMany({
-                data: Array.from(sitemap.getElementsByTagName("loc")).map((loc) => ({
-                    url: loc.innerHTML,
+            await prisma.site.createMany({
+                data: [...sitemap].map((loc) => ({
+                    url: loc[0],
                     pageRank: 0,
                 })),
             });
