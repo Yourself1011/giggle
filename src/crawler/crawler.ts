@@ -58,13 +58,32 @@ async function search(entry: Prisma.SiteCreateInput) {
         ),
     ];
 
-    for (const url of urls) {
-        console.log(url[0]);
-        await prisma.site.upsert({
-            where: { url: url[0] },
-            update: { incomingLinks: { create: [{ incomingUrl: entry.url }] } },
-            create: { url: url[0], incomingLinks: { create: [{ incomingUrl: entry.url }] } },
-        });
+    for (const match of urls) {
+        const outgoingUrl = match[0].startsWith("//")
+            ? url.protocol + match[0]
+            : match[0].startsWith("/")
+            ? url.origin + match[0]
+            : match[0];
+
+        console.log(outgoingUrl);
+        if (
+            !(await prisma.link.findFirst({
+                where: { incomingUrl: entry.url, outgoingUrl: outgoingUrl },
+            }))
+        ) {
+            // try {
+            await prisma.site.upsert({
+                where: { url: outgoingUrl },
+                update: { incomingLinks: { create: [{ incomingUrl: entry.url }] } },
+                create: {
+                    url: outgoingUrl,
+                    incomingLinks: { create: [{ incomingUrl: entry.url }] },
+                },
+            });
+            // } catch (e) {
+            //     throw e;
+            // }
+        }
     }
 
     const textOnly = rendered.replaceAll(/(<.*>)|(<\/.*>)/gm, ""); // remove html tags
@@ -74,7 +93,7 @@ async function search(entry: Prisma.SiteCreateInput) {
     let total = 0;
     let curr = "";
     for (const c of textOnly) {
-        if (c == " ") {
+        if (c == " " || c == "\n" || c == "\t") {
             if (curr in termCounts) termCounts[curr]++;
             else termCounts[curr] = 1;
             total++;
@@ -84,7 +103,9 @@ async function search(entry: Prisma.SiteCreateInput) {
         }
     }
 
-    prisma.termsOnSites.createMany({
+    console.log(termCounts);
+
+    await prisma.termsOnSites.createMany({
         data: Object.entries(termCounts).map((x) => ({
             termName: x[0],
             siteUrl: url.href,
