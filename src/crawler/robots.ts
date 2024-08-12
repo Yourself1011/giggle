@@ -4,6 +4,7 @@ export interface Rule {
 }
 
 export interface Robots {
+    url: URL;
     rules: Rule[];
     globalUserAgent: boolean;
     sitemap?: string;
@@ -15,7 +16,7 @@ export async function parse(url: URL, userAgent: string): Promise<Robots | null>
     const res = await fetch(robotsURL);
     if (!res.ok) return null;
 
-    const out: Robots = { rules: [], globalUserAgent: true };
+    const out: Robots = { url, rules: [], globalUserAgent: true };
 
     const robots = await res.text();
 
@@ -47,13 +48,12 @@ export async function parse(url: URL, userAgent: string): Promise<Robots | null>
     return out;
 }
 
-export async function check(url: URL, userAgent: string): Promise<boolean> {
-    const robots = await parse(url, userAgent);
+export function check(robots: Robots | null): boolean {
     if (!robots) return true;
 
     let closest: Rule = { type: "allow", path: "" };
 
-    const path = url.pathname;
+    const path = robots.url.pathname;
     for (const rule of robots.rules) {
         if (rule.path.length < closest.path.length) continue;
 

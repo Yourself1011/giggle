@@ -1,19 +1,36 @@
 import { Prisma } from "@prisma/client";
-import { parse } from "./robots";
+import { check, parse } from "./robots";
 import { prisma } from "@/prisma";
 
 const userAgentToken = "GiggleBot";
 const damping = 0.85;
-export default function start(rootURL: URL) {
-    search(rootURL);
+const limit = 100;
+export default async function start(rootURL: URL) {
+    // search(rootURL);
+    await prisma.site.create({
+        data: {
+            url: rootURL.href,
+        },
+    });
+
+    while ((await prisma.site.count()) < limit) {
+        const entry = await prisma.site.findFirst({ where: { crawled: false } });
+        if (!entry) break;
+        search(entry);
+    }
 }
 
-async function search(url: URL) {
+async function search(entry: Prisma.SiteCreateInput) {
+    const url = new URL(entry.url);
     console.log("crawling " + url.href);
-    let toAdd: Prisma.SiteCreateInput = { url: url.href, pageRank: 0 };
+    await prisma.site.update({ where: { url: url.href }, data: { crawled: true } });
+    const robots = await parse(url, userAgentToken);
+
+    if (!check(robots)) {
+        return; // not allowed to crawl here
+    }
 
     if (url.pathname == "/") {
-        const robots = await parse(url, userAgentToken);
         if (robots?.sitemap) {
             const sitemapRaw = await fetch(robots.sitemap);
             const sitemap = (await sitemapRaw.text()).matchAll(/(?<=<loc>).*(?=<\/loc>)/g);
@@ -37,31 +54,41 @@ async function search(url: URL) {
     // match all urls
     const urls = [
         ...rendered.matchAll(
-            /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})|((?<=href=").*(?="))/gm
+            /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s'"]{2,}|www\.[a-zA-Z0-9]+\.[^\s'"]{2,})|((?<=href=").*?(?="))/gm
         ),
     ];
 
-    // const outgoing = await prisma.site.createManyAndReturn({
-    //     data: urls.map((url) => ({ url: url[0] })),
-    //     skipDuplicates: true,
-    // });
-
-    const entry = await prisma.site.create({
-        data: {
-            url: url.href,
-            pageRank: 0,
-        },
-    });
-
-    const outgoing = await prisma.$transaction(
-        urls.map((url) =>
-            prisma.site.upsert({
-                where: { url: url[0] },
-                update: { incomingLinks: { create: [{ incomingUrl: entry.url }] } },
-                create: { url: url[0], incomingLinks: { create: [{ incomingUrl: entry.url }] } },
-            })
-        )
-    );
+    for (const url of urls) {
+        console.log(url[0]);
+        await prisma.site.upsert({
+            where: { url: url[0] },
+            update: { incomingLinks: { create: [{ incomingUrl: entry.url }] } },
+            create: { url: url[0], incomingLinks: { create: [{ incomingUrl: entry.url }] } },
+        });
+    }
 
     const textOnly = rendered.replaceAll(/(<.*>)|(<\/.*>)/gm, ""); // remove html tags
+
+    // get count of all terms in the document
+    const termCounts: { [term: string]: number } = {};
+    let total = 0;
+    let curr = "";
+    for (const c of textOnly) {
+        if (c == " ") {
+            if (curr in termCounts) termCounts[curr]++;
+            else termCounts[curr] = 1;
+            total++;
+            curr = "";
+        } else {
+            curr += c;
+        }
+    }
+
+    prisma.termsOnSites.createMany({
+        data: Object.entries(termCounts).map((x) => ({
+            termName: x[0],
+            siteUrl: url.href,
+            frequency: x[1] / total,
+        })),
+    });
 }
