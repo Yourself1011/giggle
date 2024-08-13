@@ -48,12 +48,21 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
 
     if (!res.ok) return;
 
+    if (res.redirected) {
+        console.log("redirected to " + res.url);
+        await prisma.site.upsert({
+            where: { url: res.url },
+            update: { incomingLinks: { create: [{ incomingUrl: url.href }] } },
+            create: { url: res.url, incomingLinks: { create: [{ incomingUrl: url.href }] } },
+        });
+        return;
+    }
+
     const raw = await res.text();
 
     if (!raw.startsWith("<!DOCTYPE html>")) return;
 
     const rendered = raw; // TODO: run javascript
-    // TODO redirect
 
     // match all urls
     const urls = [
@@ -75,46 +84,39 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
 
             const outgoingUrl = urlObj.href;
 
-            console.log(outgoingUrl);
+            // console.log(outgoingUrl);
             if (
                 !(await prisma.link.findFirst({
-                    where: { incomingUrl: entry.url, outgoingUrl: outgoingUrl },
+                    where: { incomingUrl: url.href, outgoingUrl: outgoingUrl },
                 }))
             ) {
                 if (skipUrls) {
-                    try {
+                    if (await prisma.site.findUnique({ where: { url: outgoingUrl } })) {
                         await prisma.site.update({
                             where: { url: outgoingUrl },
-                            data: { incomingLinks: { create: [{ incomingUrl: entry.url }] } },
+                            data: { incomingLinks: { create: [{ incomingUrl: url.href }] } },
                         });
-                    } catch (e) {
-                        if (
-                            !(
-                                e instanceof Prisma.PrismaClientKnownRequestError &&
-                                e.code == "P2025"
-                            )
-                        )
-                            throw e;
                     }
                 } else {
                     await prisma.site.upsert({
                         where: { url: outgoingUrl },
-                        update: { incomingLinks: { create: [{ incomingUrl: entry.url }] } },
+                        update: { incomingLinks: { create: [{ incomingUrl: url.href }] } },
                         create: {
                             url: outgoingUrl,
-                            incomingLinks: { create: [{ incomingUrl: entry.url }] },
+                            incomingLinks: { create: [{ incomingUrl: url.href }] },
                         },
                     });
                 }
             }
         } catch (e) {
             if (e instanceof TypeError) {
-                console.log("bad url");
+                // console.log("bad url");
             } else {
                 throw e;
             }
         }
     }
+    console.log(urls.length + " urls found");
 
     const textOnly = rendered.replaceAll(/(<[\s\S]*?>)|(<\/[\s\S]*?>)/gm, ""); // remove html tags
 

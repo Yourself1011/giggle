@@ -1,7 +1,7 @@
 import prisma from "./prisma";
 
 export default async function index() {
-    await Promise.all([calculateIDFs()]);
+    await calculateIDFs();
 }
 
 async function calculateIDFs() {
@@ -9,7 +9,7 @@ async function calculateIDFs() {
 
     const terms = await prisma.term.findMany({ select: { name: true, sites: true } });
 
-    prisma.$transaction(
+    await prisma.$transaction(
         terms.map((term) =>
             prisma.term.update({
                 where: { name: term.name },
