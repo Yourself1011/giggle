@@ -53,35 +53,50 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
     if (!raw.startsWith("<!DOCTYPE html>")) return;
 
     const rendered = raw; // TODO: run javascript
+    // TODO redirect
 
-    if (!skipUrls) {
-        // match all urls
-        const urls = [
-            ...rendered.matchAll(
-                /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s'"]{2,}|www\.[a-zA-Z0-9]+\.[^\s'"]{2,})|((?<=href=").*?(?="))/gm
-            ),
-        ];
+    // match all urls
+    const urls = [
+        ...rendered.matchAll(
+            /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s'"]{2,}|www\.[a-zA-Z0-9]+\.[^\s'"]{2,})|((?<=href=").*?(?="))/gm
+        ),
+    ];
 
-        for (const match of urls) {
-            try {
-                const urlObj = new URL(
-                    match[0].startsWith("//")
-                        ? url.protocol + match[0]
-                        : match[0].startsWith("/")
-                        ? url.origin + match[0]
-                        : match[0]
-                );
-                if (!urlObj.host) break;
+    for (const match of urls) {
+        try {
+            const urlObj = new URL(
+                match[0].startsWith("//")
+                    ? url.protocol + match[0]
+                    : match[0].startsWith("/")
+                    ? url.origin + match[0]
+                    : match[0]
+            );
+            if (!urlObj.host) break;
 
-                const outgoingUrl = urlObj.href;
+            const outgoingUrl = urlObj.href;
 
-                console.log(outgoingUrl);
-                if (
-                    !(await prisma.link.findFirst({
-                        where: { incomingUrl: entry.url, outgoingUrl: outgoingUrl },
-                    }))
-                ) {
-                    // try {
+            console.log(outgoingUrl);
+            if (
+                !(await prisma.link.findFirst({
+                    where: { incomingUrl: entry.url, outgoingUrl: outgoingUrl },
+                }))
+            ) {
+                if (skipUrls) {
+                    try {
+                        await prisma.site.update({
+                            where: { url: outgoingUrl },
+                            data: { incomingLinks: { create: [{ incomingUrl: entry.url }] } },
+                        });
+                    } catch (e) {
+                        if (
+                            !(
+                                e instanceof Prisma.PrismaClientKnownRequestError &&
+                                e.code == "P2025"
+                            )
+                        )
+                            throw e;
+                    }
+                } else {
                     await prisma.site.upsert({
                         where: { url: outgoingUrl },
                         update: { incomingLinks: { create: [{ incomingUrl: entry.url }] } },
@@ -90,16 +105,13 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
                             incomingLinks: { create: [{ incomingUrl: entry.url }] },
                         },
                     });
-                    // } catch (e) {
-                    //     throw e;
-                    // }
                 }
-            } catch (e) {
-                if (e instanceof TypeError) {
-                    console.log("bad url");
-                } else {
-                    throw e;
-                }
+            }
+        } catch (e) {
+            if (e instanceof TypeError) {
+                console.log("bad url");
+            } else {
+                throw e;
             }
         }
     }
