@@ -4,7 +4,7 @@ import { prisma } from "@/prisma";
 
 const userAgentToken = "GiggleBot";
 const damping = 0.85;
-const limit = 100;
+const limit = 500;
 export default async function start(rootURL: URL) {
     // search(rootURL);
     await prisma.site.create({
@@ -16,8 +16,9 @@ export default async function start(rootURL: URL) {
     while ((await prisma.site.count()) < limit) {
         const entry = await prisma.site.findFirst({ where: { crawled: false } });
         if (!entry) break;
-        search(entry);
+        await search(entry);
     }
+    console.log(await prisma.site.count());
 }
 
 async function search(entry: Prisma.SiteCreateInput) {
@@ -33,7 +34,7 @@ async function search(entry: Prisma.SiteCreateInput) {
     if (url.pathname == "/") {
         if (robots?.sitemap) {
             const sitemapRaw = await fetch(robots.sitemap);
-            const sitemap = (await sitemapRaw.text()).matchAll(/(?<=<loc>).*(?=<\/loc>)/g);
+            const sitemap = (await sitemapRaw.text()).matchAll(/(?<=<loc>).*(?=<\/loc>)/g); // TODO recursively parse further sitemaps
 
             prisma.site.createMany({
                 data: [...sitemap].map((loc) => ({
@@ -49,6 +50,8 @@ async function search(entry: Prisma.SiteCreateInput) {
 
     const raw = await res.text();
 
+    if (!raw.startsWith("<!DOCTYPE html>")) return;
+
     const rendered = raw; // TODO: run javascript
 
     // match all urls
@@ -59,34 +62,44 @@ async function search(entry: Prisma.SiteCreateInput) {
     ];
 
     for (const match of urls) {
-        const outgoingUrl = match[0].startsWith("//")
-            ? url.protocol + match[0]
-            : match[0].startsWith("/")
-            ? url.origin + match[0]
-            : match[0];
+        try {
+            const outgoingUrl = new URL(
+                match[0].startsWith("//")
+                    ? url.protocol + match[0]
+                    : match[0].startsWith("/")
+                    ? url.origin + match[0]
+                    : match[0]
+            ).href;
 
-        console.log(outgoingUrl);
-        if (
-            !(await prisma.link.findFirst({
-                where: { incomingUrl: entry.url, outgoingUrl: outgoingUrl },
-            }))
-        ) {
-            // try {
-            await prisma.site.upsert({
-                where: { url: outgoingUrl },
-                update: { incomingLinks: { create: [{ incomingUrl: entry.url }] } },
-                create: {
-                    url: outgoingUrl,
-                    incomingLinks: { create: [{ incomingUrl: entry.url }] },
-                },
-            });
-            // } catch (e) {
-            //     throw e;
-            // }
+            console.log(outgoingUrl);
+            if (
+                !(await prisma.link.findFirst({
+                    where: { incomingUrl: entry.url, outgoingUrl: outgoingUrl },
+                }))
+            ) {
+                // try {
+                await prisma.site.upsert({
+                    where: { url: outgoingUrl },
+                    update: { incomingLinks: { create: [{ incomingUrl: entry.url }] } },
+                    create: {
+                        url: outgoingUrl,
+                        incomingLinks: { create: [{ incomingUrl: entry.url }] },
+                    },
+                });
+                // } catch (e) {
+                //     throw e;
+                // }
+            }
+        } catch (e) {
+            if (e instanceof TypeError) {
+                console.log("bad url");
+            } else {
+                throw e;
+            }
         }
     }
 
-    const textOnly = rendered.replaceAll(/(<.*>)|(<\/.*>)/gm, ""); // remove html tags
+    const textOnly = rendered.replaceAll(/(<[\s\S]*?>)|(<\/[\s\S]*?>)/gm, ""); // remove html tags
 
     // get count of all terms in the document
     const termCounts: { [term: string]: number } = {};
@@ -94,16 +107,23 @@ async function search(entry: Prisma.SiteCreateInput) {
     let curr = "";
     for (const c of textOnly) {
         if (c == " " || c == "\n" || c == "\t") {
-            if (curr in termCounts) termCounts[curr]++;
-            else termCounts[curr] = 1;
-            total++;
-            curr = "";
+            if (curr != "") {
+                if (curr in termCounts) termCounts[curr]++;
+                else termCounts[curr] = 1;
+                total++;
+                curr = "";
+            }
         } else {
             curr += c;
         }
     }
 
-    console.log(termCounts);
+    await prisma.term.createMany({
+        data: Object.entries(termCounts).map((x) => ({
+            name: x[0],
+        })),
+        skipDuplicates: true,
+    });
 
     await prisma.termsOnSites.createMany({
         data: Object.entries(termCounts).map((x) => ({
@@ -112,4 +132,5 @@ async function search(entry: Prisma.SiteCreateInput) {
             frequency: x[1] / total,
         })),
     });
+    console.log("finished " + url.href);
 }
