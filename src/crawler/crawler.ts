@@ -4,7 +4,7 @@ import { prisma } from "@/prisma";
 
 const userAgentToken = "GiggleBot";
 const damping = 0.85;
-const limit = 500;
+const limit = 100;
 export default async function start(rootURL: URL) {
     // search(rootURL);
     await prisma.site.create({
@@ -13,15 +13,15 @@ export default async function start(rootURL: URL) {
         },
     });
 
-    while ((await prisma.site.count()) < limit) {
+    while (true) {
         const entry = await prisma.site.findFirst({ where: { crawled: false } });
         if (!entry) break;
-        await search(entry);
+        await search(entry, (await prisma.site.count()) > limit);
     }
     console.log(await prisma.site.count());
 }
 
-async function search(entry: Prisma.SiteCreateInput) {
+async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
     const url = new URL(entry.url);
     console.log("crawling " + url.href);
     await prisma.site.update({ where: { url: url.href }, data: { crawled: true } });
@@ -54,47 +54,52 @@ async function search(entry: Prisma.SiteCreateInput) {
 
     const rendered = raw; // TODO: run javascript
 
-    // match all urls
-    const urls = [
-        ...rendered.matchAll(
-            /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s'"]{2,}|www\.[a-zA-Z0-9]+\.[^\s'"]{2,})|((?<=href=").*?(?="))/gm
-        ),
-    ];
+    if (!skipUrls) {
+        // match all urls
+        const urls = [
+            ...rendered.matchAll(
+                /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s'"]{2,}|www\.[a-zA-Z0-9]+\.[^\s'"]{2,})|((?<=href=").*?(?="))/gm
+            ),
+        ];
 
-    for (const match of urls) {
-        try {
-            const outgoingUrl = new URL(
-                match[0].startsWith("//")
-                    ? url.protocol + match[0]
-                    : match[0].startsWith("/")
-                    ? url.origin + match[0]
-                    : match[0]
-            ).href;
+        for (const match of urls) {
+            try {
+                const urlObj = new URL(
+                    match[0].startsWith("//")
+                        ? url.protocol + match[0]
+                        : match[0].startsWith("/")
+                        ? url.origin + match[0]
+                        : match[0]
+                );
+                if (!urlObj.host) break;
 
-            console.log(outgoingUrl);
-            if (
-                !(await prisma.link.findFirst({
-                    where: { incomingUrl: entry.url, outgoingUrl: outgoingUrl },
-                }))
-            ) {
-                // try {
-                await prisma.site.upsert({
-                    where: { url: outgoingUrl },
-                    update: { incomingLinks: { create: [{ incomingUrl: entry.url }] } },
-                    create: {
-                        url: outgoingUrl,
-                        incomingLinks: { create: [{ incomingUrl: entry.url }] },
-                    },
-                });
-                // } catch (e) {
-                //     throw e;
-                // }
-            }
-        } catch (e) {
-            if (e instanceof TypeError) {
-                console.log("bad url");
-            } else {
-                throw e;
+                const outgoingUrl = urlObj.href;
+
+                console.log(outgoingUrl);
+                if (
+                    !(await prisma.link.findFirst({
+                        where: { incomingUrl: entry.url, outgoingUrl: outgoingUrl },
+                    }))
+                ) {
+                    // try {
+                    await prisma.site.upsert({
+                        where: { url: outgoingUrl },
+                        update: { incomingLinks: { create: [{ incomingUrl: entry.url }] } },
+                        create: {
+                            url: outgoingUrl,
+                            incomingLinks: { create: [{ incomingUrl: entry.url }] },
+                        },
+                    });
+                    // } catch (e) {
+                    //     throw e;
+                    // }
+                }
+            } catch (e) {
+                if (e instanceof TypeError) {
+                    console.log("bad url");
+                } else {
+                    throw e;
+                }
             }
         }
     }
@@ -106,14 +111,14 @@ async function search(entry: Prisma.SiteCreateInput) {
     let total = 0;
     let curr = "";
     for (const c of textOnly) {
-        if (c == " " || c == "\n" || c == "\t") {
+        if (c.match(/\s/g)) {
             if (curr != "") {
                 if (curr in termCounts) termCounts[curr]++;
                 else termCounts[curr] = 1;
                 total++;
                 curr = "";
             }
-        } else {
+        } else if (c.match(/\w/g)) {
             curr += c;
         }
     }
