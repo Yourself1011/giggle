@@ -1,8 +1,13 @@
 "use server";
 import prisma from "@/prisma";
 
+export interface QueryOut {
+    url: string;
+    score: number;
+}
+
 export default async function query(query: string, amount: number, page: number) {
-    const terms = query.replace(/\w/g, "").split(/\s/g);
+    const terms = query.toLowerCase().replace(/\W/g, " ").split(/\s/g);
 
     const idf: { [name: string]: number } = {};
     const dbTerms = await prisma.term.findMany({
@@ -19,20 +24,20 @@ export default async function query(query: string, amount: number, page: number)
 
     const sites = await prisma.site.findMany({
         where: {
+            AND: terms.map((x) => ({ terms: { some: { termName: x } } })),
+        },
+        include: {
             terms: {
-                every: {
+                where: {
                     termName: {
                         in: terms,
                     },
                 },
             },
         },
-        include: {
-            terms: true,
-        },
     });
 
-    const out: { url: string; score: number }[] = sites
+    const out: QueryOut[] = sites
         .map((site) => ({
             url: site.url,
             score:
@@ -40,7 +45,7 @@ export default async function query(query: string, amount: number, page: number)
                     .map((term) => term.frequency * idf[term.termName])
                     .reduce((p, c) => p + c, 0) * site.pageRank,
         }))
-        .sort((a, b) => a.score - b.score)
+        .sort((a, b) => b.score - a.score)
         .slice(amount * page, amount * (page + 1));
 
     return out;

@@ -3,8 +3,7 @@ import { check, parse } from "./robots";
 import { prisma } from "@/prisma";
 
 const userAgentToken = "GiggleBot";
-const damping = 0.85;
-const limit = 100;
+const limit = 200;
 export default async function start(rootURL: URL) {
     // search(rootURL);
     await prisma.site.create({
@@ -118,7 +117,7 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
     }
     console.log(urls.length + " urls found");
 
-    const textOnly = rendered.replaceAll(/(<[\s\S]*?>)|(<\/[\s\S]*?>)/gm, ""); // remove html tags
+    const textOnly = rendered.replaceAll(/(<[\s\S]*?>)|(<\/[\s\S]*?>)/gm, "").toLowerCase(); // remove html tags
 
     // get count of all terms in the document
     const termCounts: { [term: string]: number } = {};

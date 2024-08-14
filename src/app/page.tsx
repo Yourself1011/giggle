@@ -11,7 +11,7 @@ export default function Home() {
     return (
         <main className="flex min-h-screen flex-col items-center justify-center p-24">
             <form
-                className="py-2 px-4 rounded-full bg-white flex"
+                className="py-2 px-4 rounded-full bg-white flex text-black"
                 onSubmit={(e) => {
                     e.preventDefault();
                     router.push("/search?query=" + query);
