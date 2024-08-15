@@ -3,7 +3,7 @@ import { check, parse } from "./robots";
 import { prisma } from "@/prisma";
 
 const userAgentToken = "GiggleBot";
-const limit = 200;
+const limit = 2000;
 export default async function start(rootURL: URL) {
     // search(rootURL);
     await prisma.site.create({

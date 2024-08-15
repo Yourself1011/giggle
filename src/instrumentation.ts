@@ -4,8 +4,7 @@ import index from "./indexer";
 export function register() {
     console.log("SLDkfj");
     (async () => {
-        // await start(new URL("https://en.wikipedia.org/wiki/Main_Page"));
-        // // await start(new URL("https://en.wikipedia.org/wiki/Cathode-ray_tube"));
-        // await index();
+        await start(new URL("https://en.wikipedia.org/wiki/Main_Page"));
+        await index();
     })();
 }
