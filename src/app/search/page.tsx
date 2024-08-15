@@ -3,6 +3,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CiSearch } from "react-icons/ci";
 import queryDb, { QueryOut } from "./query";
+import Image from "next/image";
 
 export default function Search() {
     const searchParams = useSearchParams();
@@ -18,6 +19,7 @@ export default function Search() {
             setSites(await queryDb(query, 50, 0));
             setLoaded(true);
         })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams]);
 
     return (
@@ -45,9 +47,20 @@ export default function Search() {
             <div className="flex flex-col gap-4 p-8">
                 {sites.map((x, i) => (
                     <div key={i} className="max-w-3xl w-full">
-                        <a className="break-words" href={x.url}>
-                            {x.url}
-                        </a>
+                        <div className="flex gap-2 items-center">
+                            {x.icon != "" ? (
+                                <Image
+                                    src={x.icon}
+                                    alt={"icon for " + x.title}
+                                    width={16}
+                                    height={16}
+                                    className="size-4"
+                                />
+                            ) : null}
+                            <a className="break-words" href={x.url}>
+                                {x.title || x.url}
+                            </a>
+                        </div>
                     </div>
                 ))}
                 {!loaded ? (

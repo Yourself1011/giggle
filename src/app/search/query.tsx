@@ -3,6 +3,8 @@ import prisma from "@/prisma";
 
 export interface QueryOut {
     url: string;
+    title: string;
+    icon: string;
     score: number;
 }
 
@@ -40,6 +42,8 @@ export default async function query(query: string, amount: number, page: number)
     const out: QueryOut[] = sites
         .map((site) => ({
             url: site.url,
+            title: site.title,
+            icon: site.icon,
             score:
                 site.terms
                     .map((term) => term.frequency * idf[term.termName])

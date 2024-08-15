@@ -63,6 +63,25 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
 
     const rendered = raw; // TODO: run javascript
 
+    const title = rendered.match(/(?<=<title>).*?(?=<\/title>)/)?.[0] ?? url.href;
+    let icon = "";
+
+    const links = [...rendered.matchAll(/<link[\s\S]*?>/g)];
+    for (const candidate of links) {
+        if (candidate[0].includes('rel="icon"')) {
+            icon = new URL(candidate[0].match(/(?<=href=").*?(?=")/g)?.[0] ?? "", url.origin).href;
+            break;
+        }
+    }
+
+    await prisma.site.update({
+        where: { url: url.href },
+        data: {
+            title,
+            icon,
+        },
+    });
+
     // match all urls
     const urls = [
         ...rendered.matchAll(
@@ -126,7 +145,7 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
     for (const c of textOnly) {
         if (c.match(/\s/g)) {
             if (curr != "") {
-                if (curr in termCounts) termCounts[curr]++;
+                if (curr in termCounts && typeof termCounts[curr] == "number") termCounts[curr]++;
                 else termCounts[curr] = 1;
                 total++;
                 curr = "";
