@@ -4,14 +4,24 @@ import { prisma } from "@/prisma";
 
 const userAgentToken = "GiggleBot";
 const limit = 2000;
-export default async function start(rootURL: URL) {
-    // search(rootURL);
-    // await prisma.site.create({
-    //     data: {
-    //         url: rootURL.href,
-    //     },
-    // });
 
+export async function populate() {
+    await prisma.site.createMany({
+        data: [
+            {
+                url: "https://en.wikipedia.org/wiki/Main_Page/",
+            },
+            {
+                url: "https://www.youtube.com/",
+            },
+            {
+                url: "https://www.google.com/",
+            },
+        ],
+    });
+}
+
+export async function start() {
     while (true) {
         const entry = await prisma.site.findFirst({ where: { crawled: false } });
         if (!entry) break;
@@ -77,28 +87,6 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
 
     // logTime("to text");
 
-    const title = rendered.match(/(?<=<title>).*?(?=<\/title>)/)?.[0] ?? url.href;
-    let icon = "";
-
-    const links = [...rendered.matchAll(/<link[\s\S]*?>/g)];
-    for (const candidate of links) {
-        if (candidate[0].includes('rel="icon"')) {
-            icon = new URL(candidate[0].match(/(?<=href=").*?(?=")/g)?.[0] ?? "", url.origin).href;
-            break;
-        }
-    }
-
-    // logTime("meta");
-
-    await prisma.site.update({
-        where: { url: url.href },
-        data: {
-            title,
-            icon,
-        },
-    });
-    // logTime("meta db");
-
     // match all urls
     const urls = [
         ...rendered.matchAll(
@@ -151,6 +139,37 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
     console.log(urls.length + " urls found");
     // logTime("urls db");
 
+    const title = rendered.match(/(?<=<title>).*?(?=<\/title>)/)?.[0] ?? url.href;
+    let icon = "";
+    let description = "No description provided";
+
+    const links = [...rendered.matchAll(/<link[\s\S]*?>/g)];
+    for (const candidate of links) {
+        if (candidate[0].includes('rel="icon"')) {
+            icon = new URL(candidate[0].match(/(?<=href=").*?(?=")/g)?.[0] ?? "", url.origin).href;
+            break;
+        }
+    }
+    const metas = [...rendered.matchAll(/<meta[\s\S]*?>/g)];
+    for (const candidate of metas) {
+        if (candidate[0].includes('name="description"')) {
+            description = candidate[0].match(/(?<=content=").*?(?=")/g)?.[0] ?? description;
+            break;
+        }
+    }
+
+    // logTime("meta");
+
+    await prisma.site.update({
+        where: { url: url.href },
+        data: {
+            title,
+            icon,
+            description,
+        },
+    });
+    // logTime("meta db");
+
     const textOnly = rendered.replaceAll(/(<[\s\S]*?>)|(<\/[\s\S]*?>)/gm, "").toLowerCase(); // remove html tags
 
     // get count of all terms in the document
@@ -169,6 +188,20 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
             curr += c;
         }
     }
+    for (const c of title + " " + description) {
+        if (c.match(/\s/g)) {
+            if (curr != "" && curr.length < 100) {
+                if (curr in termCounts && typeof termCounts[curr] == "number")
+                    termCounts[curr] += 2;
+                else termCounts[curr] = 2;
+                total += 2;
+            }
+            curr = "";
+        } else if (c.match(/\w/g)) {
+            curr += c;
+        }
+    }
+
     // logTime("terms");
 
     await prisma.term.createMany({

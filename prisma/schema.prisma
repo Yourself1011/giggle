@@ -17,6 +17,7 @@ model Site {
   terms         TermsOnSites[]
   title         String         @default("")
   icon          String         @default("")
+  description   String         @default("No description provided")
   outgoingLinks Link[]         @relation("incomingLinks")
   incomingLinks Link[]         @relation("outgoingLinks")
 

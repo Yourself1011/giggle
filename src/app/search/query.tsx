@@ -5,6 +5,7 @@ export interface QueryOut {
     url: string;
     title: string;
     icon: string;
+    description: string;
     score: number;
 }
 
@@ -44,6 +45,7 @@ export default async function query(query: string, amount: number, page: number)
             url: site.url,
             title: site.title,
             icon: site.icon,
+            description: site.description,
             score:
                 site.terms
                     .map((term) => term.frequency * idf[term.termName])

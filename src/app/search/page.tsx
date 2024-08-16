@@ -61,6 +61,7 @@ export default function Search() {
                                 {x.title || x.url}
                             </a>
                         </div>
+                        <p>{x.description}</p>
                     </div>
                 ))}
                 {!loaded ? (
