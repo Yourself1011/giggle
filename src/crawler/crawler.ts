@@ -6,11 +6,11 @@ const userAgentToken = "GiggleBot";
 const limit = 2000;
 export default async function start(rootURL: URL) {
     // search(rootURL);
-    await prisma.site.create({
-        data: {
-            url: rootURL.href,
-        },
-    });
+    // await prisma.site.create({
+    //     data: {
+    //         url: rootURL.href,
+    //     },
+    // });
 
     while (true) {
         const entry = await prisma.site.findFirst({ where: { crawled: false } });
@@ -21,6 +21,14 @@ export default async function start(rootURL: URL) {
 }
 
 async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
+    let start = Date.now();
+    function logTime(event: string) {
+        if (process.env.NODE_ENV !== "production") {
+            console.log(`${event} ${Date.now() - start}ms`);
+            start = Date.now();
+        }
+    }
+
     const url = new URL(entry.url);
     console.log("crawling " + url.href);
     await prisma.site.update({ where: { url: url.href }, data: { crawled: true } });
@@ -43,7 +51,11 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
         }
     }
 
+    // logTime("robots");
+
     const res = await fetch(url);
+
+    // logTime("request");
 
     if (!res.ok) return;
 
@@ -63,6 +75,8 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
 
     const rendered = raw; // TODO: run javascript
 
+    // logTime("to text");
+
     const title = rendered.match(/(?<=<title>).*?(?=<\/title>)/)?.[0] ?? url.href;
     let icon = "";
 
@@ -74,6 +88,8 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
         }
     }
 
+    // logTime("meta");
+
     await prisma.site.update({
         where: { url: url.href },
         data: {
@@ -81,60 +97,59 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
             icon,
         },
     });
+    // logTime("meta db");
 
     // match all urls
     const urls = [
         ...rendered.matchAll(
             /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s'"]{2,}|www\.[a-zA-Z0-9]+\.[^\s'"]{2,})|((?<=href=").*?(?="))/gm
         ),
-    ];
-
-    for (const match of urls) {
+    ].map((x) => {
         try {
-            const urlObj = new URL(
-                match[0].startsWith("//")
-                    ? url.protocol + match[0]
-                    : match[0].startsWith("/")
-                    ? url.origin + match[0]
-                    : match[0]
+            return new URL(
+                x[0].startsWith("//")
+                    ? url.protocol + x[0]
+                    : x[0].startsWith("/")
+                    ? url.origin + x[0]
+                    : x[0]
             );
-            if (!urlObj.host) break;
-
-            const outgoingUrl = urlObj.href;
-
-            // console.log(outgoingUrl);
-            if (
-                !(await prisma.link.findFirst({
-                    where: { incomingUrl: url.href, outgoingUrl: outgoingUrl },
-                }))
-            ) {
-                if (skipUrls) {
-                    if (await prisma.site.findUnique({ where: { url: outgoingUrl } })) {
-                        await prisma.site.update({
-                            where: { url: outgoingUrl },
-                            data: { incomingLinks: { create: [{ incomingUrl: url.href }] } },
-                        });
-                    }
-                } else {
-                    await prisma.site.upsert({
-                        where: { url: outgoingUrl },
-                        update: { incomingLinks: { create: [{ incomingUrl: url.href }] } },
-                        create: {
-                            url: outgoingUrl,
-                            incomingLinks: { create: [{ incomingUrl: url.href }] },
-                        },
-                    });
-                }
-            }
         } catch (e) {
             if (e instanceof TypeError) {
-                // console.log("bad url");
+                return null;
             } else {
                 throw e;
             }
         }
+    });
+
+    for (let i = 0; i < urls.length; i++) {
+        const match = urls[i];
+        // invalid url or deduplicate
+        if (!match || !match.host || urls.findIndex((x) => x && x.href == match.href) !== i) break;
+
+        const outgoingUrl = match.href;
+
+        // console.log(outgoingUrl);
+        if (skipUrls) {
+            if (await prisma.site.findUnique({ where: { url: outgoingUrl } })) {
+                await prisma.site.update({
+                    where: { url: outgoingUrl },
+                    data: { incomingLinks: { create: [{ incomingUrl: url.href }] } },
+                });
+            }
+        } else {
+            await prisma.site.upsert({
+                where: { url: outgoingUrl },
+                update: { incomingLinks: { create: [{ incomingUrl: url.href }] } },
+                create: {
+                    url: outgoingUrl,
+                    incomingLinks: { create: [{ incomingUrl: url.href }] },
+                },
+            });
+        }
     }
     console.log(urls.length + " urls found");
+    // logTime("urls db");
 
     const textOnly = rendered.replaceAll(/(<[\s\S]*?>)|(<\/[\s\S]*?>)/gm, "").toLowerCase(); // remove html tags
 
@@ -144,16 +159,17 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
     let curr = "";
     for (const c of textOnly) {
         if (c.match(/\s/g)) {
-            if (curr != "") {
+            if (curr != "" && curr.length < 100) {
                 if (curr in termCounts && typeof termCounts[curr] == "number") termCounts[curr]++;
                 else termCounts[curr] = 1;
                 total++;
-                curr = "";
             }
+            curr = "";
         } else if (c.match(/\w/g)) {
             curr += c;
         }
     }
+    // logTime("terms");
 
     await prisma.term.createMany({
         data: Object.entries(termCounts).map((x) => ({
@@ -169,5 +185,6 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
             frequency: x[1] / total,
         })),
     });
-    console.log("finished " + url.href);
+    // logTime("terms db");
+    console.log("finished " + url.href + " in " + (Date.now() - start) + "ms");
 }
