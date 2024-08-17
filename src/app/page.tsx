@@ -3,13 +3,15 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CiSearch } from "react-icons/ci";
+import logo from "./logo.svg";
 
 export default function Home() {
     const [query, setQuery] = useState("");
     const router = useRouter();
 
     return (
-        <main className="flex min-h-screen flex-col items-center justify-center p-24">
+        <main className="flex min-h-screen flex-col items-center justify-center p-24 gap-4">
+            <Image src={logo} alt="giggle logo" className="max-w-xl w-[30dvw]" />
             <form
                 className="py-2 px-4 rounded-full bg-white flex text-black"
                 onSubmit={(e) => {

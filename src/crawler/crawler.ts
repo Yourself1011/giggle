@@ -53,6 +53,7 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
     const robots = await parse(url, userAgentToken);
 
     if (!check(robots)) {
+        console.log("rejected by robots.txt");
         return; // not allowed to crawl here
     }
 
@@ -78,12 +79,16 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
         if (!(e instanceof TypeError)) {
             throw e;
         }
+        console.log("url does not exist");
         return;
     }
 
     // logTime("request");
 
-    if (!res.ok) return;
+    if (!res.ok) {
+        console.log("erroneous response");
+        return;
+    }
 
     if (res.redirected) {
         console.log("redirected to " + res.url);
@@ -97,7 +102,10 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
 
     const raw = await res.text();
 
-    if (!raw.startsWith("<!DOCTYPE html>")) return;
+    if (!raw.includes("<!DOCTYPE html>")) {
+        console.log("not HTML file");
+        return;
+    }
 
     const rendered = raw; // TODO: run javascript
 

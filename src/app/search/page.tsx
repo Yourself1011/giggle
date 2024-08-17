@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { CiSearch } from "react-icons/ci";
 import queryDb, { QueryOut } from "./query";
 import Image from "next/image";
+import icon from "../icon.svg";
+import Link from "next/link";
 
 export default function Search() {
     const searchParams = useSearchParams();
@@ -40,7 +42,10 @@ export default function Search() {
 
     return (
         <main>
-            <div className="p-8 backdrop-blur-lg bg-gray-900/20 border-b-[1px] border-b-gray-800 sticky top-0">
+            <div className="flex items-center gap-4 p-8 backdrop-blur-lg bg-gray-900/20 border-b-[1px] border-b-gray-800 sticky top-0">
+                <Link href="/">
+                    <Image src={icon} alt="giggle icon" className="size-12" />
+                </Link>
                 <form
                     className="py-2 px-4 rounded-full bg-white flex w-fit text-black"
                     onSubmit={(e) => {
