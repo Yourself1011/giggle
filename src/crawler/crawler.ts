@@ -3,7 +3,7 @@ import { check, parse } from "./robots";
 import { prisma } from "@/prisma";
 
 const userAgentToken = "GiggleBot";
-const limit = 20000;
+const limit = 50000;
 
 let crawled = 0;
 
@@ -11,13 +11,7 @@ export async function populate() {
     await prisma.site.createMany({
         data: [
             {
-                url: "http://odp.org/",
-            },
-            {
-                url: "https://en.wikipedia.org/wiki/Main_Page",
-            },
-            {
-                url: "https://stackoverflow.com/",
+                url: "https://en.wikipedia.org/wiki/Lists_of_websites",
             },
         ],
     });
@@ -37,7 +31,7 @@ export async function start() {
     console.log(await prisma.site.count());
 }
 
-async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
+async function search(entry: Prisma.SiteGetPayload<{}>, skipUrls?: boolean) {
     let start = Date.now();
     function logTime(event: string) {
         if (process.env.NODE_ENV !== "production") {
@@ -102,7 +96,7 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
 
     const raw = await res.text();
 
-    if (!raw.includes("<!DOCTYPE html>")) {
+    if (!raw.toLowerCase().includes("<!doctype html>")) {
         console.log("not HTML file");
         return;
     }
@@ -116,26 +110,28 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
         ...rendered.matchAll(
             /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s'"]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s'"]{2,}|www\.[a-zA-Z0-9]+\.[^\s'"]{2,})|((?<=href=").*?(?="))/gm
         ),
-    ].map((x) => {
-        try {
-            return new URL(
-                x[0].startsWith("//")
-                    ? url.protocol + x[0]
-                    : x[0].startsWith("/")
-                    ? url.origin + x[0]
-                    : x[0]
-            );
-        } catch (e) {
-            if (e instanceof TypeError) {
-                return null;
-            } else {
-                throw e;
+    ]
+        .map((x) => {
+            try {
+                return new URL(
+                    x[0].startsWith("//")
+                        ? url.protocol + x[0]
+                        : x[0].startsWith("/")
+                        ? url.origin + x[0]
+                        : x[0]
+                );
+            } catch (e) {
+                if (e instanceof TypeError) {
+                    return null;
+                } else {
+                    throw e;
+                }
             }
-        }
-    });
+        })
+        .reverse();
 
     let urlCount = 0;
-    let operations = [];
+    let objs: Prisma.LinkCreateWithoutIncomingSiteInput[] = [];
     for (let i = 0; i < urls.length; i++) {
         const match = urls[i];
         // invalid url or deduplicate
@@ -147,29 +143,24 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
         // console.log(outgoingUrl);
         if (skipUrls) {
             if (await prisma.site.findUnique({ where: { url: outgoingUrl } })) {
-                operations.push(
-                    prisma.site.update({
-                        where: { url: outgoingUrl },
-                        data: { incomingLinks: { create: [{ incomingUrl: url.href }] } },
-                    })
-                );
+                objs.push({ outgoingSite: { connect: { url: outgoingUrl } } });
             }
         } else {
-            operations.push(
-                prisma.site.upsert({
-                    where: { url: outgoingUrl },
-                    update: { incomingLinks: { create: [{ incomingUrl: url.href }] } },
-                    create: {
-                        url: outgoingUrl,
-                        incomingLinks: { create: [{ incomingUrl: url.href }] },
-                    },
-                })
-            );
+            objs.push({
+                outgoingSite: {
+                    connectOrCreate: { where: { url: outgoingUrl }, create: { url: outgoingUrl } },
+                },
+            });
         }
         urlCount++;
     }
 
-    await prisma.$transaction(operations);
+    await prisma.site.update({
+        where: { url: url.href },
+        data: {
+            outgoingLinks: { create: objs },
+        },
+    });
 
     console.log(urlCount + " urls found");
     // logTime("urls db");
@@ -239,17 +230,21 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
 
     // logTime("terms");
 
+    const termsIds: { [key: string]: number } = {};
     await prisma.term.createMany({
         data: Object.entries(termCounts).map((x) => ({
             name: x[0],
         })),
         skipDuplicates: true,
     });
+    (await prisma.term.findMany({ where: { name: { in: Object.keys(termCounts) } } })).map((x) => {
+        if (x) termsIds[x.name] = x.id;
+    });
 
     await prisma.termsOnSites.createMany({
         data: Object.entries(termCounts).map((x) => ({
-            termName: x[0],
-            siteUrl: url.href,
+            termId: termsIds[x[0]],
+            siteId: entry.order,
             frequency: x[1] / total,
         })),
     });

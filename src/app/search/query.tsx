@@ -13,7 +13,7 @@ export default async function query(query: string, amount: number, page: number)
     const count = await prisma.site.count();
     const terms = query.toLowerCase().replace(/\W/g, " ").split(/\s/g);
 
-    const idf: { [name: string]: number } = {};
+    const idf: { [name: number]: number } = {};
     const dbTerms = await prisma.term.findMany({
         where: {
             name: {
@@ -30,18 +30,18 @@ export default async function query(query: string, amount: number, page: number)
     });
 
     dbTerms.forEach((x) => {
-        idf[x.name] = Math.log10(count / x._count.sites);
+        idf[x.id] = Math.log10(count / x._count.sites);
     });
 
     const sites = await prisma.site.findMany({
         where: {
-            AND: terms.map((x) => ({ terms: { some: { termName: x } } })),
+            AND: dbTerms.map((x) => ({ terms: { some: { termId: x.id } } })),
         },
         include: {
             terms: {
                 where: {
-                    termName: {
-                        in: terms,
+                    termId: {
+                        in: dbTerms.map((x) => x.id),
                     },
                 },
             },
@@ -56,7 +56,7 @@ export default async function query(query: string, amount: number, page: number)
             description: site.description,
             score:
                 site.terms
-                    .map((term) => term.frequency * idf[term.termName])
+                    .map((term) => term.frequency * idf[term.termId])
                     .reduce((p, c) => p + c, 0) * site.pageRank,
         }))
         .sort((a, b) => b.score - a.score)

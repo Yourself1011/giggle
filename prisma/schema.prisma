@@ -11,7 +11,7 @@ datasource db {
 }
 
 model Site {
-  order         Int            @default(autoincrement())
+  order         Int            @id @default(autoincrement())
   url           String         @unique
   crawled       Boolean        @default(false)
   pageRank      Float          @default(0.25)
@@ -35,6 +35,7 @@ model Link {
 }
 
 model Term {
+  id    Int            @id @default(autoincrement())
   name  String         @unique
   sites TermsOnSites[]
 
@@ -42,11 +43,11 @@ model Term {
 }
 
 model TermsOnSites {
-  Term      Term   @relation(fields: [termName], references: [name], onDelete: Cascade)
-  termName  String
-  Site      Site   @relation(fields: [siteUrl], references: [url], onDelete: Cascade)
-  siteUrl   String
+  Term      Term  @relation(fields: [termId], references: [id], onDelete: Cascade)
+  termId    Int
+  Site      Site  @relation(fields: [siteId], references: [order], onDelete: Cascade)
+  siteId    Int
   frequency Float
 
-  @@id([termName, siteUrl])
+  @@id([termId, siteId])
 }
