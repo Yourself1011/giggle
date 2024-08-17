@@ -13,7 +13,15 @@ export interface Robots {
 export async function parse(url: URL, userAgent: string): Promise<Robots | null> {
     const robotsURL = new URL("/robots.txt", url.origin);
 
-    const res = await fetch(robotsURL);
+    let res;
+    try {
+        res = await fetch(robotsURL);
+    } catch (e) {
+        if (!(e instanceof TypeError)) {
+            throw e;
+        }
+        return null;
+    }
     if (!res.ok) return null;
 
     const out: Robots = { url, rules: [], globalUserAgent: true };

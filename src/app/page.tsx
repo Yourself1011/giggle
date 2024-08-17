@@ -18,6 +18,7 @@ export default function Home() {
                 }}
             >
                 <input
+                    autoFocus
                     className="p-2 bg-none focus:outline-none w-[65dvw] max-w-xl"
                     placeholder="Search"
                     value={query}

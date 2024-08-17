@@ -1,6 +1,6 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CiSearch } from "react-icons/ci";
 import queryDb, { QueryOut } from "./query";
 import Image from "next/image";
@@ -22,6 +22,22 @@ export default function Search() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams]);
 
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        console.log("joe");
+        const handler = (e: KeyboardEvent) => {
+            if (e.key == "/") {
+                e.preventDefault();
+                inputRef.current?.focus();
+            }
+        };
+        document.addEventListener("keydown", handler);
+        return () => {
+            document.removeEventListener("keydown", handler);
+        };
+    }, []);
+
     return (
         <main>
             <div className="p-8 backdrop-blur-lg bg-gray-900/20 border-b-[1px] border-b-gray-800 sticky top-0">
@@ -29,11 +45,14 @@ export default function Search() {
                     className="py-2 px-4 rounded-full bg-white flex w-fit text-black"
                     onSubmit={(e) => {
                         e.preventDefault();
+                        setLoaded(false);
+                        setSites([]);
                         router.push("/search?query=" + query);
-                        router.refresh();
                     }}
                 >
                     <input
+                        ref={inputRef}
+                        autoFocus
                         className="p-1.5 bg-none focus:outline-none w-[35dvw] max-w-xl"
                         placeholder="Search"
                         value={query}
@@ -61,7 +80,12 @@ export default function Search() {
                                 {x.title || x.url}
                             </a>
                         </div>
-                        <p>{x.description}</p>
+                        {x.title ? (
+                            <p className="text-gray-400 text-xs text-ellipsis w-full text-nowrap overflow-hidden">
+                                {x.url}
+                            </p>
+                        ) : null}
+                        <p className="text-gray-300 text-sm">{x.description}</p>
                     </div>
                 ))}
                 {!loaded ? (
