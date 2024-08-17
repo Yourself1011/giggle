@@ -2,62 +2,62 @@ import { Prisma } from "@prisma/client";
 import prisma from "./prisma";
 
 export default async function index() {
-    await calculateIDFs();
+    // await calculateIDFs();
     await pageRank();
 }
 
-async function calculateIDFs() {
-    const start = Date.now();
-    const count = await prisma.site.count();
-    const termCount = await prisma.term.count({
-        where: { AND: [{ sites: { some: {} } }, { IDF: { equals: 0 } }] },
-    });
+// async function calculateIDFs() {
+//     const start = Date.now();
+//     const count = await prisma.site.count();
+//     const termCount = await prisma.term.count({
+//         where: { AND: [{ sites: { some: {} } }, { IDF: { equals: 0 } }] },
+//     });
 
-    console.log(`begin idf ${termCount / 2000} batches`);
+//     console.log(`begin idf ${termCount / 2000} batches`);
 
-    const terms = await prisma.term.findMany({
-        take: 2000,
-        where: { AND: [{ sites: { some: {} } }, { IDF: { equals: 0 } }] },
-        select: { name: true, _count: { select: { sites: true } } },
-    });
+//     const terms = await prisma.term.findMany({
+//         take: 2000,
+//         where: { AND: [{ sites: { some: {} } }, { IDF: { equals: 0 } }] },
+//         select: { name: true, _count: { select: { sites: true } } },
+//     });
 
-    let cursor = { name: terms[terms.length - 1].name };
+//     let cursor = { name: terms[terms.length - 1].name };
 
-    console.log("begin transaction");
+//     console.log("begin transaction");
 
-    await prisma.$transaction(
-        terms.map((term) =>
-            prisma.term.update({
-                where: { name: term.name },
-                data: { IDF: Math.log10(count / term._count.sites) },
-            })
-        )
-    );
-    console.log(`finished idf batch 1/${termCount / 2000}`);
+//     await prisma.$transaction(
+//         terms.map((term) =>
+//             prisma.term.update({
+//                 where: { name: term.name },
+//                 data: { IDF: Math.log10(count / term._count.sites) },
+//             })
+//         )
+//     );
+//     console.log(`finished idf batch 1/${termCount / 2000}`);
 
-    for (let i = 1; i < termCount / 2000; i++) {
-        const terms = await prisma.term.findMany({
-            take: 2000,
-            skip: 1,
-            cursor,
-            where: { AND: [{ sites: { some: {} } }, { IDF: { equals: 0 } }] },
-            select: { name: true, _count: { select: { sites: true } } },
-        });
+//     for (let i = 1; i < termCount / 2000; i++) {
+//         const terms = await prisma.term.findMany({
+//             take: 2000,
+//             skip: 1,
+//             cursor,
+//             where: { AND: [{ sites: { some: {} } }, { IDF: { equals: 0 } }] },
+//             select: { name: true, _count: { select: { sites: true } } },
+//         });
 
-        cursor = { name: terms[terms.length - 1].name };
+//         cursor = { name: terms[terms.length - 1].name };
 
-        await prisma.$transaction(
-            terms.map((term) =>
-                prisma.term.update({
-                    where: { name: term.name },
-                    data: { IDF: Math.log10(count / term._count.sites) },
-                })
-            )
-        );
-        console.log(`finished idf batch ${i + 1}/${termCount / 2000}`);
-    }
-    console.log(`calculated idfs in ${Date.now() - start}ms`);
-}
+//         await prisma.$transaction(
+//             terms.map((term) =>
+//                 prisma.term.update({
+//                     where: { name: term.name },
+//                     data: { IDF: Math.log10(count / term._count.sites) },
+//                 })
+//             )
+//         );
+//         console.log(`finished idf batch ${i + 1}/${termCount / 2000}`);
+//     }
+//     console.log(`calculated idfs in ${Date.now() - start}ms`);
+// }
 
 async function pageRank() {
     const damping = 0.85;

@@ -10,6 +10,7 @@ export interface QueryOut {
 }
 
 export default async function query(query: string, amount: number, page: number) {
+    const count = await prisma.site.count();
     const terms = query.toLowerCase().replace(/\W/g, " ").split(/\s/g);
 
     const idf: { [name: string]: number } = {};
@@ -19,10 +20,17 @@ export default async function query(query: string, amount: number, page: number)
                 in: terms,
             },
         },
+        include: {
+            _count: {
+                select: {
+                    sites: true,
+                },
+            },
+        },
     });
 
     dbTerms.forEach((x) => {
-        idf[x.name] = x.IDF;
+        idf[x.name] = Math.log10(count / x._count.sites);
     });
 
     const sites = await prisma.site.findMany({

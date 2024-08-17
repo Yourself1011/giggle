@@ -35,7 +35,6 @@ model Link {
 
 model Term {
   name  String         @unique
-  IDF   Float          @default(0)
   sites TermsOnSites[]
 
   @@index([name], type: Hash)
