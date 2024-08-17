@@ -7,6 +7,7 @@ export default async function index() {
 }
 
 async function calculateIDFs() {
+    const start = Date.now();
     const count = await prisma.site.count();
     const termCount = await prisma.term.count({
         where: { AND: [{ sites: { some: {} } }, { IDF: { equals: 0 } }] },
@@ -20,7 +21,7 @@ async function calculateIDFs() {
         select: { name: true, _count: { select: { sites: true } } },
     });
 
-    let cursor = { name: terms[1999].name };
+    let cursor = { name: terms[terms.length - 1].name };
 
     console.log("begin transaction");
 
@@ -43,7 +44,7 @@ async function calculateIDFs() {
             select: { name: true, _count: { select: { sites: true } } },
         });
 
-        cursor = { name: terms[1999].name };
+        cursor = { name: terms[terms.length - 1].name };
 
         await prisma.$transaction(
             terms.map((term) =>
@@ -55,7 +56,7 @@ async function calculateIDFs() {
         );
         console.log(`finished idf batch ${i + 1}/${termCount / 2000}`);
     }
-    console.log("calculated idfs");
+    console.log(`calculated idfs in ${Date.now() - start}ms`);
 }
 
 async function pageRank() {

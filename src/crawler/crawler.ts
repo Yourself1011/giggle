@@ -9,13 +9,10 @@ export async function populate() {
     await prisma.site.createMany({
         data: [
             {
-                url: "https://en.wikipedia.org/wiki/Main_Page/",
+                url: "https://en.wikipedia.org/wiki/Main_Page",
             },
             {
                 url: "https://www.youtube.com/",
-            },
-            {
-                url: "https://www.google.com/",
             },
         ],
     });
@@ -63,7 +60,15 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
 
     // logTime("robots");
 
-    const res = await fetch(url);
+    let res;
+    try {
+        res = await fetch(url);
+    } catch (e) {
+        if (!(e instanceof TypeError)) {
+            throw e;
+        }
+        return;
+    }
 
     // logTime("request");
 
@@ -110,10 +115,12 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
         }
     });
 
+    let urlCount = 0;
     for (let i = 0; i < urls.length; i++) {
         const match = urls[i];
         // invalid url or deduplicate
-        if (!match || !match.host || urls.findIndex((x) => x && x.href == match.href) !== i) break;
+        if (!match || !match.host || urls.findIndex((x) => x && x.href == match.href) !== i)
+            continue;
 
         const outgoingUrl = match.href;
 
@@ -135,8 +142,9 @@ async function search(entry: Prisma.SiteCreateInput, skipUrls?: boolean) {
                 },
             });
         }
+        urlCount++;
     }
-    console.log(urls.length + " urls found");
+    console.log(urlCount + " urls found");
     // logTime("urls db");
 
     const title = rendered.match(/(?<=<title>).*?(?=<\/title>)/)?.[0] ?? url.href;
