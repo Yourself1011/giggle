@@ -142,9 +142,9 @@ async function search(entry: Prisma.SiteGetPayload<{}>, skipUrls?: boolean) {
 
         // console.log(outgoingUrl);
         if (skipUrls) {
-            if (await prisma.site.findUnique({ where: { url: outgoingUrl } })) {
-                objs.push({ outgoingSite: { connect: { url: outgoingUrl } } });
-            }
+            // if (await prisma.site.findUnique({ where: { url: outgoingUrl } })) {
+            objs.push({ outgoingSite: { connect: { url: outgoingUrl } } });
+            // }
         } else {
             objs.push({
                 outgoingSite: {
@@ -155,12 +155,24 @@ async function search(entry: Prisma.SiteGetPayload<{}>, skipUrls?: boolean) {
         urlCount++;
     }
 
-    await prisma.site.update({
-        where: { url: url.href },
-        data: {
-            outgoingLinks: { create: objs },
-        },
-    });
+    // logTime("urls");
+
+    try {
+        await prisma.site.update({
+            where: { url: url.href },
+            data: {
+                outgoingLinks: { create: objs },
+            },
+        });
+    } catch (e) {
+        if (
+            !(
+                e instanceof Prisma.PrismaClientKnownRequestError &&
+                (e.code === "P2018" || e.code === "P2025")
+            )
+        )
+            throw e;
+    }
 
     console.log(urlCount + " urls found");
     // logTime("urls db");
