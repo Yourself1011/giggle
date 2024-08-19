@@ -3,9 +3,11 @@ import index from "./indexer";
 
 export function register() {
     console.log("SLDkfj");
-    (async () => {
-        // await populate();
-        await start();
-        await index();
-    })();
+    if (process.env.NODE_ENV !== "production") {
+        (async () => {
+            // await populate();
+            await start();
+            await index();
+        })();
+    }
 }
