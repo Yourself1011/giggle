@@ -1,5 +1,6 @@
 "use server";
 import prisma from "@/prisma";
+import { cache } from "react";
 
 export interface QueryOut {
     url: string;
@@ -9,7 +10,7 @@ export interface QueryOut {
     score: number;
 }
 
-export default async function query(query: string, amount: number, page: number) {
+export const query = cache(async (query: string, amount: number, page: number) => {
     const count = await prisma.site.count();
     const terms = query.toLowerCase().replace(/\W/g, " ").split(/\s/g);
     const ids: { [term: string]: number } = {};
@@ -68,4 +69,4 @@ export default async function query(query: string, amount: number, page: number)
         .slice(amount * page, amount * (page + 1));
 
     return out;
-}
+});

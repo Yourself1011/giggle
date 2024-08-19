@@ -2,7 +2,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CiSearch } from "react-icons/ci";
-import queryDb, { QueryOut } from "./query";
+import { query as queryDb, QueryOut } from "./query";
 import Image from "next/image";
 import icon from "../icon.svg";
 import Link from "next/link";
