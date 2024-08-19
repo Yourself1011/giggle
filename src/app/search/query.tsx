@@ -27,13 +27,13 @@ export const query = cache(async (query: string, amount: number, page: number) =
                 in: terms,
             },
         },
-        include: {
-            _count: {
-                select: {
-                    sites: true,
-                },
-            },
-        },
+        // include: {
+        //     _count: {
+        //         select: {
+        //             sites: true,
+        //         },
+        //     },
+        // },
     });
     // const dbTerms = [];
 
@@ -55,10 +55,12 @@ export const query = cache(async (query: string, amount: number, page: number) =
 
     // console.log("dbTerms in " + (Date.now() - start) + "ms");
 
-    dbTerms.forEach((x) => {
-        idf[x.id] = Math.log10(count / x._count.sites);
+    for (const x of dbTerms) {
+        idf[x.id] = Math.log10(
+            count / (await prisma.termsOnSites.count({ where: { termId: x.id } }))
+        );
         ids[x.name] = x.id;
-    });
+    }
 
     const sites = await prisma.site.findMany({
         where: {
