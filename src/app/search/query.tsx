@@ -2,8 +2,6 @@
 import prisma from "@/prisma";
 import { cache } from "react";
 
-export const maxDuration = 60;
-
 export interface QueryOut {
     url: string;
     title: string;
