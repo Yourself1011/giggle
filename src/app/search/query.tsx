@@ -13,11 +13,13 @@ export interface QueryOut {
 export const query = cache(async (query: string, amount: number, page: number) => {
     const count = await prisma.site.count();
     const terms = query.toLowerCase().replace(/\W/g, " ").split(/\s/g);
+    // console.log(terms);
     const ids: { [term: string]: number } = {};
     terms.forEach((x) => {
         ids[x] = -1;
     });
 
+    // const start = Date.now();
     const idf: { [name: number]: number } = {};
     const dbTerms = await prisma.term.findMany({
         where: {
@@ -33,6 +35,25 @@ export const query = cache(async (query: string, amount: number, page: number) =
             },
         },
     });
+    // const dbTerms = [];
+
+    // for (const term of terms) {
+    //     const res = await prisma.term.findUnique({
+    //         where: {
+    //             name: term,
+    //         },
+    //         include: {
+    //             _count: {
+    //                 select: {
+    //                     sites: true,
+    //                 },
+    //             },
+    //         },
+    //     });
+    //     if (res) dbTerms.push(res);
+    // }
+
+    // console.log("dbTerms in " + (Date.now() - start) + "ms");
 
     dbTerms.forEach((x) => {
         idf[x.id] = Math.log10(count / x._count.sites);
@@ -53,6 +74,7 @@ export const query = cache(async (query: string, amount: number, page: number) =
             },
         },
     });
+    // console.log(sites.length);
 
     const out: QueryOut[] = sites
         .map((site) => ({

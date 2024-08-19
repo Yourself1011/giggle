@@ -50,4 +50,5 @@ model TermsOnSites {
   frequency Float
 
   @@id([termId, siteId])
+  @@index([termId])
 }
